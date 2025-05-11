@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling", "torch"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "pymatlie"
+version = "0.0.1a0"
+authors = [
+  { name="Luis Marques", email="lmarques@umich.edu" },
+]
+description = "pymatlie provides an implementation of Matrix Lie Groups (MLG) used in robotics."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+  "torch>=2.1",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "docformatter",
+    "isort",
+    "mypy",
+    "pylint>=2.14.5",
+    "pytest-pylint>=0.18.0",
+    "pytest>=7.2.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/luis-marques/pymatlie"
+Issues = "https://github.com/luis-marques/pymatlie/issues"
+
+[tool.black]
+line-length = 150
+target-version = ["py311"]
+
+[tool.isort]
+py_version = 311
+profile = "black"
+multi_line_output = 2
+skip_glob = ["venv/*"]
+split_on_trailing_comma = true
+
+[tool.mypy]
+strict_equality = true
+disallow_untyped_calls = true
+warn_unreachable = true
+exclude = ["venv/*"]
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*"]
+ignore_missing_imports = true
