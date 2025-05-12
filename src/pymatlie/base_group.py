@@ -199,7 +199,7 @@ class MatrixLieGroup(ABC):
         assert estimated_state.shape == true_state.shape, f"right_invariant_error: mismatched shapes {estimated_state.shape} vs {true_state.shape}"
         return cls.inverse(true_state) @ estimated_state
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor, noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
@@ -211,6 +211,9 @@ class MatrixLieGroup(ABC):
         inertia_matrix_xi = xi @ self.inertia_matrix.T  # (N, D) inertia_matrixb @ xi
         rhs = torch.bmm(coad, inertia_matrix_xi[..., None])[..., 0] + Bu  # Broadcasting same inertia_matrix for all xi
         xi_dot = (self.inertia_matrix_inv @ rhs.T).T
+        if noise is not None:
+            assert noise.shape == (xi.shape[0], D), f"noise must be same shape as xi, got {noise.shape} vs {xi.shape}"
+            xi_dot += noise
         return xi, xi_dot
 
     def update_configuration(self, g: torch.Tensor, xi: torch.Tensor, dt: float) -> torch.Tensor:
@@ -222,6 +225,14 @@ class MatrixLieGroup(ABC):
         assert g.ndim == 3 and g.shape[-2:] == self.matrix_size, f"update_q: g must be (N, {self.matrix_size}), got {g.shape}"
         assert xi.ndim == 2 and xi.shape[-1] == self.g_dim, f"update_q: xi must be (N, {self.g_dim}), got {xi.shape}"
         return g @ self.exp(xi * dt)
+
+    def update_velocity(self, xi: torch.Tensor, dxi: torch.Tensor, dt: float) -> torch.Tensor:
+        """Updates the velocity (Lie algebra element xi) using the Lie algebra
+        element dxi.
+        """
+        assert xi.ndim == 2 and xi.shape[-1] == self.g_dim, f"update_velocity: xi must be (N, {self.g_dim}), got {xi.shape}"
+        assert dxi.ndim == 2 and dxi.shape[-1] == self.g_dim, f"update_velocity: dxi must be (N, {self.g_dim}), got {dxi.shape}"
+        return xi + dxi * dt
 
     @abstractmethod
     def map_q_to_configuration(q: torch.Tensor) -> torch.Tensor:
@@ -272,8 +283,22 @@ class NonholonomicGroup(MatrixLieGroup):
         """Computes the Pfaffian A of the nonholonomic group."""
         raise NotImplementedError
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor, noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
-        _, xi_dot = super().f(g, xi, u)
+        # _, xi_dot = super().f(g, xi, u)
+        D = self.g_dim
+        assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
+        assert u.shape == (xi.shape[0], self.u_dim), f"action must be same shape as xi, got {u.shape} vs {xi.shape}"
+
+        Bu = u @ self.B_T  # Bu in batched form
+
+        coad = self.coadjoint_operator(xi)  # (N, D, D)
+        inertia_matrix_xi = xi @ self.inertia_matrix.T  # (N, D) inertia_matrixb @ xi
+        rhs = torch.bmm(coad, inertia_matrix_xi[..., None])[..., 0] + Bu  # Broadcasting same inertia_matrix for all xi
+        xi_dot = (self.inertia_matrix_inv @ rhs.T).T
         xi_dot_proj = self.project_to_motion_constraints(g, xi_dot)
+
+        if noise is not None:
+            assert noise.shape == (xi.shape[0], D), f"noise must be same shape as xi, got {noise.shape} vs {xi.shape}"
+            xi_dot_proj += noise
         return xi, xi_dot_proj
