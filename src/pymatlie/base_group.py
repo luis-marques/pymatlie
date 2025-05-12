@@ -203,8 +203,7 @@ class MatrixLieGroup(ABC):
         """Update using Euler-Poincare equations."""
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
-        assert u.shape == (xi.shape[0], self.u_dim), f"action must be same shape as xi, got {u.shape} vs {xi.shape}"
-
+        assert u.shape[1] == self.u_dim and u.ndim == 2, f"u must be (N, {self.u_dim}), got {u.shape}"
         Bu = u @ self.B_T  # Bu in batched form
 
         coad = self.coadjoint_operator(xi)  # (N, D, D)
@@ -282,14 +281,15 @@ class NonholonomicGroup(MatrixLieGroup):
     def get_Pfaffian_A(self, g:torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Computes the Pfaffian A of the nonholonomic group."""
         raise NotImplementedError
+    # TODO: can this be made a property on subclass if they are constant???
 
     def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor, noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
         # _, xi_dot = super().f(g, xi, u)
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
-        assert u.shape == (xi.shape[0], self.u_dim), f"action must be same shape as xi, got {u.shape} vs {xi.shape}"
-
+        assert u.shape[1] == self.u_dim and u.ndim == 2, f"u must be (N, {self.u_dim}), got {u.shape}"
+        # TODO: clean this and holonomic to use same interface as state-space dynamics (i.e. get forces, ...)
         Bu = u @ self.B_T  # Bu in batched form
 
         coad = self.coadjoint_operator(xi)  # (N, D, D)
