@@ -199,7 +199,7 @@ class MatrixLieGroup(ABC):
         assert estimated_state.shape == true_state.shape, f"right_invariant_error: mismatched shapes {estimated_state.shape} vs {true_state.shape}"
         return cls.inverse(true_state) @ estimated_state
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor, noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
@@ -210,9 +210,6 @@ class MatrixLieGroup(ABC):
         inertia_matrix_xi = xi @ self.inertia_matrix.T  # (N, D) inertia_matrixb @ xi
         rhs = torch.bmm(coad, inertia_matrix_xi[..., None])[..., 0] + Bu  # Broadcasting same inertia_matrix for all xi
         xi_dot = (self.inertia_matrix_inv @ rhs.T).T
-        if noise is not None:
-            assert noise.shape == (xi.shape[0], D), f"noise must be same shape as xi, got {noise.shape} vs {xi.shape}"
-            xi_dot += noise
         return xi, xi_dot
 
     def update_configuration(self, g: torch.Tensor, xi: torch.Tensor, dt: float) -> torch.Tensor:
@@ -283,7 +280,7 @@ class NonholonomicGroup(MatrixLieGroup):
         raise NotImplementedError
     # TODO: can this be made a property on subclass if they are constant???
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor, noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
         # _, xi_dot = super().f(g, xi, u)
         D = self.g_dim
@@ -298,7 +295,4 @@ class NonholonomicGroup(MatrixLieGroup):
         xi_dot = (self.inertia_matrix_inv @ rhs.T).T
         xi_dot_proj = self.project_to_motion_constraints(g, xi_dot)
 
-        if noise is not None:
-            assert noise.shape == (xi.shape[0], D), f"noise must be same shape as xi, got {noise.shape} vs {xi.shape}"
-            xi_dot_proj += noise
         return xi, xi_dot_proj
