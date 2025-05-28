@@ -212,6 +212,14 @@ class MatrixLieGroup(ABC):
         xi_dot = (self.inertia_matrix_inv @ rhs.T).T
         return xi, xi_dot
 
+    def lie_bracket(self, xi_1: torch.Tensor, xi_2: torch.Tensor) -> torch.Tensor:
+        """Lie bracket of two Lie algebra elements."""
+        assert xi_1.ndim == 2 and xi_1.shape[-1] == self.g_dim, f"lie_bracket: xi_1 must be (N, {self.g_dim}), got {xi_1.shape}"
+        assert xi_2.ndim == 2 and xi_2.shape[-1] == self.g_dim, f"lie_bracket: xi_2 must be (N, {self.g_dim}), got {xi_2.shape}"
+        h1 = self.hat(xi_1)
+        h2 = self.hat(xi_2)
+        return self.vee(h1 @ h2 - h2 @ h1)
+
     def update_configuration(self, g: torch.Tensor, xi: torch.Tensor, dt: float) -> torch.Tensor:
         """Updates the configuration (group element g) using the Lie algebra
         element xi.
