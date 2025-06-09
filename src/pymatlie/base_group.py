@@ -203,8 +203,7 @@ class MatrixLieGroup(ABC):
         """Update using Euler-Poincare equations."""
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
-        assert u.shape == (xi.shape[0], self.u_dim), f"action must be same shape as xi, got {u.shape} vs {xi.shape}"
-
+        assert u.shape[1] == self.u_dim and u.ndim == 2, f"u must be (N, {self.u_dim}), got {u.shape}"
         Bu = u @ self.B_T  # Bu in batched form
 
         coad = self.coadjoint_operator(xi)  # (N, D, D)
@@ -212,6 +211,14 @@ class MatrixLieGroup(ABC):
         rhs = torch.bmm(coad, inertia_matrix_xi[..., None])[..., 0] + Bu  # Broadcasting same inertia_matrix for all xi
         xi_dot = (self.inertia_matrix_inv @ rhs.T).T
         return xi, xi_dot
+
+    def lie_bracket(self, xi_1: torch.Tensor, xi_2: torch.Tensor) -> torch.Tensor:
+        """Lie bracket of two Lie algebra elements."""
+        assert xi_1.ndim == 2 and xi_1.shape[-1] == self.g_dim, f"lie_bracket: xi_1 must be (N, {self.g_dim}), got {xi_1.shape}"
+        assert xi_2.ndim == 2 and xi_2.shape[-1] == self.g_dim, f"lie_bracket: xi_2 must be (N, {self.g_dim}), got {xi_2.shape}"
+        h1 = self.hat(xi_1)
+        h2 = self.hat(xi_2)
+        return self.vee(h1 @ h2 - h2 @ h1)
 
     def update_configuration(self, g: torch.Tensor, xi: torch.Tensor, dt: float) -> torch.Tensor:
         """Updates the configuration (group element g) using the Lie algebra
@@ -222,6 +229,14 @@ class MatrixLieGroup(ABC):
         assert g.ndim == 3 and g.shape[-2:] == self.matrix_size, f"update_q: g must be (N, {self.matrix_size}), got {g.shape}"
         assert xi.ndim == 2 and xi.shape[-1] == self.g_dim, f"update_q: xi must be (N, {self.g_dim}), got {xi.shape}"
         return g @ self.exp(xi * dt)
+
+    def update_velocity(self, xi: torch.Tensor, dxi: torch.Tensor, dt: float) -> torch.Tensor:
+        """Updates the velocity (Lie algebra element xi) using the Lie algebra
+        element dxi.
+        """
+        assert xi.ndim == 2 and xi.shape[-1] == self.g_dim, f"update_velocity: xi must be (N, {self.g_dim}), got {xi.shape}"
+        assert dxi.ndim == 2 and dxi.shape[-1] == self.g_dim, f"update_velocity: dxi must be (N, {self.g_dim}), got {dxi.shape}"
+        return xi + dxi * dt
 
     @abstractmethod
     def map_q_to_configuration(q: torch.Tensor) -> torch.Tensor:
@@ -271,9 +286,21 @@ class NonholonomicGroup(MatrixLieGroup):
     def get_Pfaffian_A(self, g:torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Computes the Pfaffian A of the nonholonomic group."""
         raise NotImplementedError
+    # TODO: can this be made a property on subclass if they are constant???
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
-        _, xi_dot = super().f(g, xi, u)
+        # _, xi_dot = super().f(g, xi, u)
+        D = self.g_dim
+        assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
+        assert u.shape[1] == self.u_dim and u.ndim == 2, f"u must be (N, {self.u_dim}), got {u.shape}"
+        # TODO: clean this and holonomic to use same interface as state-space dynamics (i.e. get forces, ...)
+        Bu = u @ self.B_T  # Bu in batched form
+
+        coad = self.coadjoint_operator(xi)  # (N, D, D)
+        inertia_matrix_xi = xi @ self.inertia_matrix.T  # (N, D) inertia_matrixb @ xi
+        rhs = torch.bmm(coad, inertia_matrix_xi[..., None])[..., 0] + Bu  # Broadcasting same inertia_matrix for all xi
+        xi_dot = (self.inertia_matrix_inv @ rhs.T).T
         xi_dot_proj = self.project_to_motion_constraints(g, xi_dot)
+
         return xi, xi_dot_proj

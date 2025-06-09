@@ -53,20 +53,21 @@ class SE2(MatrixLieGroup):
         tau_hat[..., :2, 2] = rho.squeeze(-1)  # Set the translation part
         return tau_hat
 
+    #TODO: change back to this
     # # @torch.compile
-    @staticmethod
-    def exp(tau: torch.Tensor) -> torch.Tensor:
-        """Computes the exponential map of SE(2)"""
-        assert tau.ndim == 2 and tau.shape[-1] == SE2.g_dim, f"exp requires shape (N, {SE2.g_dim}), got {tau.shape}"
-        rho = tau[..., :2]
-        phi = tau[..., 2:3]
+    # @staticmethod
+    # def exp(tau: torch.Tensor) -> torch.Tensor:
+    #     """Computes the exponential map of SE(2)"""
+    #     assert tau.ndim == 2 and tau.shape[-1] == SE2.g_dim, f"exp requires shape (N, {SE2.g_dim}), got {tau.shape}"
+    #     rho = tau[..., :2]
+    #     phi = tau[..., 2:3]
 
-        g = torch.eye(3, device=tau.device).repeat(*tau.shape[:-1], 1, 1)
-        g[..., :2, :2] = SO2.exp(phi)  # SO(2) exponential, returns (N, 2, 2)
+    #     g = torch.eye(3, device=tau.device).repeat(*tau.shape[:-1], 1, 1)
+    #     g[..., :2, :2] = SO2.exp(phi)  # SO(2) exponential, returns (N, 2, 2)
 
-        V = SO2.left_jacobian(phi)  # (N, 2, 2)
-        g[..., :2, 2] = torch.matmul(V, rho.unsqueeze(-1))[..., 0]  # (N, 2)
-        return g
+    #     V = SO2.left_jacobian(phi)  # (N, 2, 2)
+    #     g[..., :2, 2] = torch.matmul(V, rho.unsqueeze(-1))[..., 0]  # (N, 2)
+    #     return g
 
     # @torch.compile
     @staticmethod
@@ -91,6 +92,31 @@ class SE2(MatrixLieGroup):
         jac[..., 0, 2] = (theta * x + y - y * torch.cos(theta) - x * torch.sin(theta)) / (theta**2 + 1e-15)
         jac[..., 1, 2] = (theta * y - x + x * torch.cos(theta) - y * torch.sin(theta)) / (theta**2 + 1e-15)
         return jac
+
+    # TODO: check this
+    @classmethod
+    def left_jacobian_inverse(cls, tau: torch.Tensor) -> torch.Tensor:
+        """
+        Analytic inverse of the left‐Jacobian J(τ) for SE(2).
+        tau is shape (B,3) = [ρ_x, ρ_y, φ].
+        Returns J(τ)^{-1}, shape (B,3,3).
+        """
+        assert tau.ndim == 2 and tau.shape[1] == 3
+        B = tau.shape[0]
+        φ    = tau[:, 2]                        # (B,)
+        # 1) invert the 2×2 SO(2) left‐Jacobian on φ
+        J2_inv = SO2.left_jacobian_inverse(φ.unsqueeze(-1))  # (B,2,2)
+
+        # 2) grab the ɡ terms from your existing left_jacobian
+        full_J = cls.left_jacobian(tau)         # (B,3,3)
+        trans = full_J[:, :2, 2]                # (B,2)
+
+        # 3) build the inverse: block‐upper triangular
+        inv = torch.zeros((B, 3, 3), device=tau.device, dtype=tau.dtype)
+        inv[:, :2, :2] = J2_inv
+        inv[:, :2,  2] = -(J2_inv @ trans.unsqueeze(-1)).squeeze(-1)
+        inv[:,  2,  2] = 1.0
+        return inv
 
     @staticmethod
     def adjoint_matrix(g: torch.Tensor) -> torch.Tensor:

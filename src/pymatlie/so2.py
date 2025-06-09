@@ -2,7 +2,7 @@
 
 import torch
 from pymatlie.base_group import MatrixLieGroup
-from pymatlie.vecops import sincu, versine_over_x
+from pymatlie.vecops import sincu, versine_over_x, sinc_taylor, versine_over_x_taylor
 
 
 class SO2(MatrixLieGroup):
@@ -68,8 +68,8 @@ class SO2(MatrixLieGroup):
         tau = tau[..., 0]  # (N,)
         I = torch.eye(2, dtype=tau.dtype, device=tau.device)  # (2, 2)
         skew = SO2.skew_sym().to(tau.device).to(tau.dtype)  # (2, 2)
-
-        return sincu(tau)[..., None, None] * I + versine_over_x(tau)[..., None, None] * skew
+        # TODO: compare with torch.sincu and torch.versine_over_x (from vecops...)
+        return sinc_taylor(tau)[..., None, None] * I + versine_over_x_taylor(tau)[..., None, None] * skew
 
     @staticmethod
     def left_jacobian_inverse(tau: torch.Tensor) -> torch.Tensor:
@@ -77,8 +77,8 @@ class SO2(MatrixLieGroup):
         2)."""
         assert tau.ndim == 2 and tau.shape[-1] == SO2.g_dim, "left_jacobian_inverse requires shape (N, 1)"
         tau = tau[..., 0]
-        A = sincu(tau)  # (N,)
-        B = versine_over_x(tau)  # (N,)
+        A = sinc_taylor(tau)  # (N,)
+        B = versine_over_x_taylor(tau)  # (N,)
         denom = A**2 + B**2  # (N,)
 
         row0 = torch.stack([A, B], dim=-1)  # (N, 2)
