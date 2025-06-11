@@ -16,7 +16,6 @@ def versine_over_x(x: torch.Tensor) -> torch.Tensor:
     return x.new_tensor(0.5) * x * torch.square(sincu(x / x.new_tensor(2.0)))
 
 
-
 def sinc_taylor(phi, eps=1e-4):
     # phi: (...,) tensor
     small = phi.abs() < eps

@@ -4,7 +4,6 @@ import torch
 from pymatlie.base_group import MatrixLieGroup
 from pymatlie.vecops import sincu, versine_over_x, sinc_taylor, versine_over_x_taylor
 
-
 class SO2(MatrixLieGroup):
     """SO(2) Lie group implementation (batch-only)."""
 

@@ -40,3 +40,9 @@ Jr      = SE2.right_jacobian(xi)
 Ad      = SE2.adjoint_matrix(g)
 ad      = SE2.ad_operator(g)
 ```
+
+## Features
+
+- Implemented SO(2), SE(2)
+- Batched
+- Euler-Poincare and Euler-Poincare-Suslov
