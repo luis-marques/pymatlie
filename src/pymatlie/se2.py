@@ -134,8 +134,8 @@ class SE2(MatrixLieGroup):
         assert xi.ndim == 2 and xi.shape[-1] == SE2.g_dim, f"ad_operator requires shape (N, {SE2.g_dim}), got {xi.shape}"
         hat_matrix = torch.zeros((*xi.shape[:-1], 3, 3), device=xi.device, dtype=xi.dtype)
         hat_matrix[..., :2, :2] = SO2.hat(xi[..., 2:3])
-        hat_matrix[..., 0, 2] = xi[..., 1]
-        hat_matrix[..., 1, 2] = -xi[..., 0]
+        hat_matrix[..., 2, 0] = xi[..., 1]
+        hat_matrix[..., 2, 1] = -xi[..., 0]
         return hat_matrix
 
     @staticmethod
