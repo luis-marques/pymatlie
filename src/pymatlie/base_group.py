@@ -262,6 +262,7 @@ class NonholonomicGroup(MatrixLieGroup):
     """Base class for nonholonomic matrix Lie groups."""
 
     constraint_projection_matrix: Optional[torch.Tensor] = field(init=False, repr=False)  # Enforces A @ xi = 0 constraint
+    # constraint_projection_matrix_wrench: Optional[torch.Tensor] = field(init=False, repr=False)  # Enforces 
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -276,7 +277,10 @@ class NonholonomicGroup(MatrixLieGroup):
         P = self.inertia_matrix_inv @ A_matrix.T @ lambda_solver @ A_matrix  # inertia_matrix^-1 @ A^T @ (A @ inertia_matrix^-1 @ A^T)^-1 @ A
         I_minus_P = torch.eye(self.g_dim, device=self.inertia_matrix.device) - P
 
-        object.__setattr__(self, "constraint_projection_matrix", I_minus_P.T)
+        # PI = torch.eye(self.g_dim, device=self.inertia_matrix.device) - A_matrix.T @ torch.linalg.inv(A_matrix @ self.inertia_matrix_inv @ A_matrix.T) @ A_matrix @ self.inertia_matrix_inv
+
+        object.__setattr__(self, "constraint_projection_matrix", I_minus_P.T) # Storing transpose for batch multiplication purposes
+        # object.__setattr__(self, "constraint_projection_matrix_wrench", PI)
 
     def project_to_motion_constraints(self, g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Project the state to the motion constraints."""
