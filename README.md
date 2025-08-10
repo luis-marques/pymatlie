@@ -1,3 +1,7 @@
+# PyMatLie
+
+![workflow](https://github.com/luis-marques/pymatlie/actions/workflows/ci.yml/badge.svg)
+
 ## Installation
 Either install via `pip` through
 ```

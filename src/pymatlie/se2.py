@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Tuple
 
 import torch
+
 from pymatlie.base_group import MatrixLieGroup
 from pymatlie.so2 import SO2
 
@@ -53,7 +54,6 @@ class SE2(MatrixLieGroup):
         tau_hat[..., :2, 2] = rho.squeeze(-1)  # Set the translation part
         return tau_hat
 
-    #TODO: change back to this
     # # @torch.compile
     # @staticmethod
     # def exp(tau: torch.Tensor) -> torch.Tensor:
@@ -93,29 +93,28 @@ class SE2(MatrixLieGroup):
         jac[..., 1, 2] = (theta * y - x + x * torch.cos(theta) - y * torch.sin(theta)) / (theta**2 + 1e-15)
         return jac
 
-    # TODO: check this
     @classmethod
     def left_jacobian_inverse(cls, tau: torch.Tensor) -> torch.Tensor:
-        """
-        Analytic inverse of the left‐Jacobian J(τ) for SE(2).
-        tau is shape (B,3) = [ρ_x, ρ_y, φ].
-        Returns J(τ)^{-1}, shape (B,3,3).
+        """Analytic inverse of the left‐Jacobian J(τ) for SE(2).
+
+        tau is shape (B,3) = [ρ_x, ρ_y, φ]. Returns J(τ)^{-1}, shape
+        (B,3,3).
         """
         assert tau.ndim == 2 and tau.shape[1] == 3
         B = tau.shape[0]
-        φ    = tau[:, 2]                        # (B,)
+        phi = tau[:, 2]  # (B,)
         # 1) invert the 2×2 SO(2) left‐Jacobian on φ
-        J2_inv = SO2.left_jacobian_inverse(φ.unsqueeze(-1))  # (B,2,2)
+        J2_inv = SO2.left_jacobian_inverse(phi.unsqueeze(-1))  # (B,2,2)
 
         # 2) grab the ɡ terms from your existing left_jacobian
-        full_J = cls.left_jacobian(tau)         # (B,3,3)
-        trans = full_J[:, :2, 2]                # (B,2)
+        full_J = cls.left_jacobian(tau)  # (B,3,3)
+        trans = full_J[:, :2, 2]  # (B,2)
 
         # 3) build the inverse: block‐upper triangular
         inv = torch.zeros((B, 3, 3), device=tau.device, dtype=tau.dtype)
         inv[:, :2, :2] = J2_inv
-        inv[:, :2,  2] = -(J2_inv @ trans.unsqueeze(-1)).squeeze(-1)
-        inv[:,  2,  2] = 1.0
+        inv[:, :2, 2] = -(J2_inv @ trans.unsqueeze(-1)).squeeze(-1)
+        inv[:, 2, 2] = 1.0
         return inv
 
     @staticmethod
@@ -161,18 +160,18 @@ class SE2(MatrixLieGroup):
         """Compute J⁻¹(q)=J(q)^T mapping ξ→q̇ without any pinv."""
         J = SE2.compute_twist_map(q)
         return J.transpose(-2, -1)
-    
+
     @staticmethod
     def map_q_to_configuration(q: torch.Tensor) -> torch.Tensor:
-        assert q.ndim == 2 and q.shape[-1] == SE2.g_dim, f"euclidean_vector_to_g requires shape (N, {SE2.g_dim}), got {q.shape}"
+        assert q.ndim == 2 and q.shape[-1] == SE2.g_dim, f"map_q_to_configuration requires shape (N, {SE2.g_dim}), got {q.shape}"
         g = torch.eye(3, device=q.device).repeat(*q.shape[:-1], 1, 1)
         g[..., 0:2, 2] = q[..., :2]
         g[..., :2, :2] = SO2.exp(q[..., 2].unsqueeze(-1))
         return g
-    
+
     @staticmethod
     def map_configuration_to_q(g: torch.Tensor) -> torch.Tensor:
-        assert g.ndim == 3 and g.shape[-2:] == SE2.matrix_size, f"g_to_euclidean_vector requires shape (N, {SE2.matrix_size}), got {g.shape}"
+        assert g.ndim == 3 and g.shape[-2:] == SE2.matrix_size, f"map_configuration_to_q requires shape (N, {SE2.matrix_size}), got {g.shape}"
         theta = torch.atan2(g[..., 1, 0], g[..., 0, 0])
         x = g[..., 0, 2]  # (N,)
         y = g[..., 1, 2]  # (N,)
@@ -186,12 +185,12 @@ class SE2(MatrixLieGroup):
         xi = torch.bmm(J_twist, dq.unsqueeze(-1)).squeeze(-1)  # (N, g_dim)
         # assert xi.shape == (dq.shape[0], self.g_dim), f"xi shape mismatch: expected {(dq.shape[0], self.g_dim)}, got {xi.shape}"
         return xi
-    
+
     @staticmethod
-    def map_velocity_to_dq(q: torch.Tensor, vel: torch.Tensor) -> torch.Tensor:
+    def map_velocity_to_dq(q: torch.Tensor, velocity: torch.Tensor) -> torch.Tensor:
         assert q.ndim == 2 and q.shape[1] == SE2.g_dim, f"map_velocity_to_dq requires shape (N, {SE2.g_dim}), got {q.shape}"
-        assert vel.ndim == 2 and vel.shape[1] == SE2.g_dim, f"velocity_to_dq requires shape (N, {SE2.g_dim}), got {vel.shape}"
+        assert velocity.ndim == 2 and velocity.shape[1] == SE2.g_dim, f"velocity_to_dq requires shape (N, {SE2.g_dim}), got {velocity.shape}"
         J_twist_inv = SE2.compute_twist_map_inverse(q)
-        dq = torch.bmm(J_twist_inv, vel.unsqueeze(-1)).squeeze(-1)
+        dq = torch.bmm(J_twist_inv, velocity.unsqueeze(-1)).squeeze(-1)
         # assert dq.shape == (vel.shape[0], self.g_dim), f"dq shape mismatch: expected {(N, self.g_dim)}, got {dq.shape}"
         return dq

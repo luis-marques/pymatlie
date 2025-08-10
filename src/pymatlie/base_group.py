@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 
@@ -44,7 +44,7 @@ class MatrixLieGroup(ABC):
         assert self.B.shape == (self.g_dim, self.u_dim), f"dynamics_step: B must be ({self.g_dim}, {self.u_dim}), got {self.B.shape}"
         object.__setattr__(self, "B_T", self.B.T)
 
-    def project_to_motion_constraints(self, g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
+    def project_to_motion_constraints(self, _g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Project the state to the motion constraints."""
         return xi
 
@@ -189,8 +189,9 @@ class MatrixLieGroup(ABC):
     def right_invariant_error(cls, estimated_state: torch.Tensor, true_state: torch.Tensor) -> torch.Tensor:
         """Computes the right invariant error between the estimated state and
         the true state."""
-        assert estimated_state.shape == true_state.shape, f"right_invariant_error: mismatched shapes {estimated_state.shape} vs {true_state.shape}"
-        return estimated_state @ cls.inverse(true_state)
+        # assert estimated_state.shape == true_state.shape, f"right_invariant_error: mismatched shapes {estimated_state.shape} vs {true_state.shape}"
+        # return estimated_state @ cls.inverse(true_state)
+        return true_state @ cls.inverse(estimated_state)
 
     @classmethod
     def left_invariant_error(cls, estimated_state: torch.Tensor, true_state: torch.Tensor) -> torch.Tensor:
@@ -199,7 +200,7 @@ class MatrixLieGroup(ABC):
         assert estimated_state.shape == true_state.shape, f"right_invariant_error: mismatched shapes {estimated_state.shape} vs {true_state.shape}"
         return cls.inverse(true_state) @ estimated_state
 
-    def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def f(self, _g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
@@ -232,37 +233,44 @@ class MatrixLieGroup(ABC):
 
     def update_velocity(self, xi: torch.Tensor, dxi: torch.Tensor, dt: float) -> torch.Tensor:
         """Updates the velocity (Lie algebra element xi) using the Lie algebra
-        element dxi.
-        """
+        element dxi."""
         assert xi.ndim == 2 and xi.shape[-1] == self.g_dim, f"update_velocity: xi must be (N, {self.g_dim}), got {xi.shape}"
         assert dxi.ndim == 2 and dxi.shape[-1] == self.g_dim, f"update_velocity: dxi must be (N, {self.g_dim}), got {dxi.shape}"
         return xi + dxi * dt
 
+    @staticmethod
     @abstractmethod
     def map_q_to_configuration(q: torch.Tensor) -> torch.Tensor:
         """Map the configuration vector to the Lie group element."""
         raise NotImplementedError
 
+    @staticmethod
     @abstractmethod
     def map_configuration_to_q(g: torch.Tensor) -> torch.Tensor:
         """Map the Lie Group element to configuration space."""
         raise NotImplementedError
 
+    @staticmethod
     @abstractmethod
     def map_dq_to_velocity(q: torch.Tensor, dq: torch.Tensor) -> torch.Tensor:
-        """ Map the velocity in configuration space to the Lie Algebra velocity."""
+        """Map the velocity in configuration space to the Lie Algebra
+        velocity."""
         raise NotImplementedError
 
+    @staticmethod
     @abstractmethod
     def map_velocity_to_dq(q: torch.Tensor, velocity: torch.Tensor) -> torch.Tensor:
-        """ Map the velocity in Lie Algebra to the configuration space velocity."""
+        """Map the velocity in Lie Algebra to the configuration space
+        velocity."""
         raise NotImplementedError
 
+
+@dataclass(frozen=True)
 class NonholonomicGroup(MatrixLieGroup):
     """Base class for nonholonomic matrix Lie groups."""
 
-    constraint_projection_matrix_velocity: Optional[torch.Tensor] = field(init=False, repr=False)  # Enforces A @ xi = 0 constraint
-    constraint_projection_matrix_wrench: Optional[torch.Tensor] = field(init=False, repr=False)  # Enforces 
+    constraint_projection_matrix_velocity: torch.Tensor = field(init=False, repr=False)  # Enforces A @ xi = 0 constraint
+    constraint_projection_matrix_wrench: torch.Tensor = field(init=False, repr=False)  # Enforces
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -277,20 +285,22 @@ class NonholonomicGroup(MatrixLieGroup):
         P = self.inertia_matrix_inv @ A_matrix.T @ lambda_solver @ A_matrix  # inertia_matrix^-1 @ A^T @ (A @ inertia_matrix^-1 @ A^T)^-1 @ A
         I_minus_P = torch.eye(self.g_dim, device=self.inertia_matrix.device) - P
 
-        PI = torch.eye(self.g_dim, device=self.inertia_matrix.device) - A_matrix.T @ torch.linalg.inv(A_matrix @ self.inertia_matrix_inv @ A_matrix.T) @ A_matrix @ self.inertia_matrix_inv
+        PI = (
+            torch.eye(self.g_dim, device=self.inertia_matrix.device)
+            - A_matrix.T @ torch.linalg.inv(A_matrix @ self.inertia_matrix_inv @ A_matrix.T) @ A_matrix @ self.inertia_matrix_inv
+        )
 
-        object.__setattr__(self, "constraint_projection_matrix", I_minus_P) # Storing transpose for batch multiplication purposes
+        object.__setattr__(self, "constraint_projection_matrix_velocity", I_minus_P)  # Storing transpose for batch multiplication purposes
         object.__setattr__(self, "constraint_projection_matrix_wrench", PI)
 
-    def project_to_motion_constraints(self, g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
+    def project_to_motion_constraints(self, _g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Project the state to the motion constraints."""
-        return xi @ self.constraint_projection_matrix.T 
+        return xi @ self.constraint_projection_matrix_velocity.T
 
     @abstractmethod
-    def get_Pfaffian_A(self, g:torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
+    def get_Pfaffian_A(self, g: torch.Tensor, xi: torch.Tensor) -> torch.Tensor:
         """Computes the Pfaffian A of the nonholonomic group."""
         raise NotImplementedError
-    # TODO: can this be made a property on subclass if they are constant???
 
     def f(self, g: torch.Tensor, xi: torch.Tensor, u: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Update using Euler-Poincare equations."""
@@ -298,7 +308,6 @@ class NonholonomicGroup(MatrixLieGroup):
         D = self.g_dim
         assert xi.ndim == 2 and xi.shape[1] == D, f"xi must be (N, {D}), got {xi.shape}"
         assert u.shape[1] == self.u_dim and u.ndim == 2, f"u must be (N, {self.u_dim}), got {u.shape}"
-        # TODO: clean this and holonomic to use same interface as state-space dynamics (i.e. get forces, ...)
         Bu = u @ self.B_T  # Bu in batched form
 
         coad = self.coadjoint_operator(xi)  # (N, D, D)

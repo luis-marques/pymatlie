@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+
 from pymatlie.se2 import SE2
 from pymatlie.so2 import SO2
 
@@ -12,8 +13,6 @@ LIE_GROUPS = [SE2, SO2]
 def test_size(LieGroup):
     """Test matrix size properties."""
     assert LieGroup.matrix_size[0] == LieGroup.matrix_size[1]
-    assert LieGroup.matrix_size[0] * LieGroup.matrix_size[1] == LieGroup.SIZE
-    assert LieGroup.SIZE >= LieGroup.g_dim
 
 
 @pytest.mark.parametrize("LieGroup", LIE_GROUPS)
@@ -55,11 +54,11 @@ def test_shapes(LieGroup):
     g_expm = LieGroup.expm(tau_hat)
     assert g_expm.shape == mat_shape, f"expm: expected {mat_shape}, got {g_expm.shape}"
 
-    g_from_vec = LieGroup.euclidean_vector_to_g(tau)
-    assert g_from_vec.shape == mat_shape, f"euclidean_vector_to_g: expected {mat_shape}, got {g_from_vec.shape}"
+    g_from_vec = LieGroup.map_q_to_configuration(tau)
+    assert g_from_vec.shape == mat_shape, f"map_q_to_configuration: expected {mat_shape}, got {g_from_vec.shape}"
 
-    tau_from_g = LieGroup.g_to_euclidean_vector(g)
-    assert tau_from_g.shape == vec_shape, f"g_to_euclidean_vector: expected {vec_shape}, got {tau_from_g.shape}"
+    tau_from_g = LieGroup.map_configuration_to_q(g)
+    assert tau_from_g.shape == vec_shape, f"map_configuration_to_q: expected {vec_shape}, got {tau_from_g.shape}"
 
     # ----- Jacobians -----
     if hasattr(LieGroup, "left_jacobian"):

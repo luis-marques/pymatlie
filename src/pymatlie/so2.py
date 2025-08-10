@@ -1,8 +1,10 @@
 """SO(2) Lie group implementation."""
 
 import torch
+
 from pymatlie.base_group import MatrixLieGroup
-from pymatlie.vecops import sincu, versine_over_x, sinc_taylor, versine_over_x_taylor
+from pymatlie.vecops import sincu, versine_over_x
+
 
 class SO2(MatrixLieGroup):
     """SO(2) Lie group implementation (batch-only)."""
@@ -67,8 +69,7 @@ class SO2(MatrixLieGroup):
         tau = tau[..., 0]  # (N,)
         I = torch.eye(2, dtype=tau.dtype, device=tau.device)  # (2, 2)
         skew = SO2.skew_sym().to(tau.device).to(tau.dtype)  # (2, 2)
-        # TODO: compare with torch.sincu and torch.versine_over_x (from vecops...)
-        return sinc_taylor(tau)[..., None, None] * I + versine_over_x_taylor(tau)[..., None, None] * skew
+        return sincu(tau)[..., None, None] * I + versine_over_x(tau)[..., None, None] * skew
 
     @staticmethod
     def left_jacobian_inverse(tau: torch.Tensor) -> torch.Tensor:
@@ -76,8 +77,8 @@ class SO2(MatrixLieGroup):
         2)."""
         assert tau.ndim == 2 and tau.shape[-1] == SO2.g_dim, "left_jacobian_inverse requires shape (N, 1)"
         tau = tau[..., 0]
-        A = sinc_taylor(tau)  # (N,)
-        B = versine_over_x_taylor(tau)  # (N,)
+        A = sincu(tau)  # (N,)
+        B = versine_over_x(tau)  # (N,)
         denom = A**2 + B**2  # (N,)
 
         row0 = torch.stack([A, B], dim=-1)  # (N, 2)
@@ -91,13 +92,13 @@ class SO2(MatrixLieGroup):
         return torch.eye(2, dtype=g.dtype, device=g.device).repeat(g.shape[0], 1, 1)
 
     @staticmethod
-    def g_to_euclidean_vector(g: torch.Tensor) -> torch.Tensor:
+    def map_configuration_to_q(g: torch.Tensor) -> torch.Tensor:
         """Converts a Lie group element (SO(2) matrix) to a Lie algebra
         element."""
         return SO2.log(g)
 
     @staticmethod
-    def euclidean_vector_to_g(x):
+    def map_q_to_configuration(q: torch.Tensor) -> torch.Tensor:
         """Converts a Lie algebra element (SO(2) vector) to a Lie group
         element."""
-        return SO2.exp(x)
+        return SO2.exp(q)
