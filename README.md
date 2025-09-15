@@ -1,3 +1,8 @@
+# PyMatLie
+
+![workflow](https://github.com/luis-marques/pymatlie/actions/workflows/ci.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ## Installation
 Either install via `pip` through
 ```
@@ -7,7 +12,7 @@ or, for development, clone the repository and install in editable mode using
 ```
 $ python -m venv venv
 $ source venv/bin/activate
-$ pip install -e .
+$ pip install -e ".[dev]"
 ```
 
 ## Usage

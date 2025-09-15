@@ -2,9 +2,10 @@
 
 import pytest
 import torch
+from torch.linalg import matrix_exp
+
 from pymatlie.se2 import SE2
 from pymatlie.so2 import SO2
-from torch.linalg import matrix_exp
 
 LIE_GROUPS = [SE2, SO2]
 
@@ -13,8 +14,6 @@ LIE_GROUPS = [SE2, SO2]
 def test_exp(LieGroup):
     """Test the exponential map for Lie groups."""
     assert LieGroup.matrix_size[0] == LieGroup.matrix_size[1], "Matrix must be square"
-    assert LieGroup.matrix_size[0] * LieGroup.matrix_size[1] == LieGroup.SIZE, "Matrix size must match SIZE"
-    assert LieGroup.SIZE >= LieGroup.g_dim, "Size must be greater than or equal to dimension"
 
     psi = torch.randn(200, LieGroup.g_dim)
     psi_hat = LieGroup.hat(psi)

@@ -1,6 +1,6 @@
 **/__pycache__
 dist
-
 uv.lock
-
 .vscode/
+venv/
+.mypy_cache/
